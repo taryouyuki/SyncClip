@@ -108,6 +108,17 @@ jobs:
 
   // ===================== ANDROID SOURCE FILES =====================
   {
+    path: 'android/gradle.properties',
+    name: 'gradle.properties',
+    category: 'android',
+    language: 'properties',
+    content: `# Enable AndroidX support
+android.useAndroidX=true
+android.nonTransitiveRClass=true
+org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+`,
+  },
+  {
     path: 'android/settings.gradle.kts',
     name: 'settings.gradle.kts',
     category: 'android',
@@ -617,14 +628,22 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
 class MainActivity : ComponentActivity() {
@@ -632,7 +651,6 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Start background clipboard listener service
         val serviceIntent = Intent(this, ClipboardListenerService::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForegroundService(serviceIntent)
@@ -641,25 +659,84 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            SyncClipAndroidApp()
+            SyncClipTheme {
+                SyncClipAndroidApp()
+            }
         }
     }
+}
+
+/**
+ * Material You Theme supporting Android 12+ Dynamic Accent Color & Dark Mode
+ */
+@Composable
+fun SyncClipTheme(
+    darkTheme: Boolean = isSystemInDarkTheme(),
+    dynamicColor: Boolean = true,
+    content: @Composable () -> Unit
+) {
+    val context = LocalContext.current
+
+    val colorScheme = when {
+        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+        }
+        darkTheme -> darkColorScheme(
+            primary = Color(0xFF80D49E),
+            onPrimary = Color(0xFF00381C),
+            primaryContainer = Color(0xFF00522B),
+            onPrimaryContainer = Color(0xFFA1F5BA),
+            surface = Color(0xFF111411),
+            onSurface = Color(0xFFE1E3DF),
+            surfaceVariant = Color(0xFF1E241E)
+        )
+        else -> lightColorScheme(
+            primary = Color(0xFF056D3B),
+            onPrimary = Color.White,
+            primaryContainer = Color(0xFFA1F5BA),
+            onPrimaryContainer = Color(0xFF00210E),
+            surface = Color(0xFFF7FAF4),
+            onSurface = Color(0xFF191C19),
+            surfaceVariant = Color(0xFFE7ECE3)
+        )
+    }
+
+    MaterialTheme(colorScheme = colorScheme, content = content)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SyncClipAndroidApp() {
-    var maxHistory by remember { mutableStateOf(5) }
-    var autoSync by remember { mutableStateOf(true) }
-    var networkFilter by remember { mutableStateOf(true) }
+    val context = LocalContext.current
+    val isDark = isSystemInDarkTheme()
+    val isDynamicColorSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+
+    val prefs = remember { context.getSharedPreferences("SyncClipPrefs", Context.MODE_PRIVATE) }
+    var maxHistory by remember { mutableStateOf(prefs.getInt("maxHistory", 5)) }
+    var autoSync by remember { mutableStateOf(prefs.getBoolean("autoSync", true)) }
+    var networkFilter by remember { mutableStateOf(prefs.getBoolean("networkFilterEnabled", true)) }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("SyncClip (Android)") },
+                title = { Text("SyncClip") },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
-                )
+                    containerColor = MaterialTheme.colorScheme.surface
+                ),
+                actions = {
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        modifier = Modifier.padding(end = 12.dp)
+                    ) {
+                        Text(
+                            text = if (isDark) "ダークモード" else "ライトモード",
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                }
             )
         }
     ) { padding ->
@@ -669,27 +746,27 @@ fun SyncClipAndroidApp() {
                 .fillMaxSize()
                 .padding(16.dp)
         ) {
-            Text(
-                text = "クリップボード自動同期・暗号化稼働中",
-                style = MaterialTheme.typography.titleMedium
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "履歴表示数: $maxHistory 件 (設定で拡張可能)",
-                style = MaterialTheme.typography.bodyMedium,
-                color = Color.Gray
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("自動同期", modifier = Modifier.weight(1f))
-                Switch(checked = autoSync, onCheckedChange = { autoSync = it })
-            }
-
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("指定ネットワーク制限", modifier = Modifier.weight(1f))
-                Switch(checked = networkFilter, onCheckedChange = { networkFilter = it })
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                ),
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = if (isDynamicColorSupported) "Material You (アクセントカラー自動連動中)" else "システムカラー反映中",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "Androidの壁紙アクセントカラーとダークモードを同期して画面全体に反映しています。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                    )
+                }
             }
         }
     }
