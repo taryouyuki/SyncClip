@@ -1,11 +1,17 @@
 package com.syncclip.app
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
@@ -28,8 +34,8 @@ import androidx.compose.ui.unit.sp
 
 /**
  * SyncClip Android Main Activity
- * Implements Android Material You Dynamic Color (Monet System Accent)
- * and automatic Dark Mode detection.
+ * Implements Android Material You Dynamic Color (Monet System Accent),
+ * continuous background sync permission prompts, and 10-network whitelist management.
  */
 class MainActivity : ComponentActivity() {
 
@@ -37,11 +43,15 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         // Start background clipboard listener service
-        val serviceIntent = Intent(this, ClipboardListenerService::class.java)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(serviceIntent)
-        } else {
-            startService(serviceIntent)
+        try {
+            val serviceIntent = Intent(this, ClipboardListenerService::class.java)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(serviceIntent)
+            } else {
+                startService(serviceIntent)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
 
         setContent {
@@ -108,18 +118,119 @@ fun SyncClipAndroidApp() {
     var maxHistory by remember { mutableStateOf(prefs.getInt("maxHistory", 5)) }
     var autoSync by remember { mutableStateOf(prefs.getBoolean("autoSync", true)) }
     var networkFilter by remember { mutableStateOf(prefs.getBoolean("networkFilterEnabled", true)) }
+
+    // Whitelist with up to 10 networks
+    val defaultNetworks = setOf("Home_5G_AC", "Office_Secure_WiFi")
+    var allowedNetworks by remember {
+        mutableStateOf(prefs.getStringSet("allowedNetworks", defaultNetworks)?.toList() ?: defaultNetworks.toList())
+    }
+    var newSsidInput by remember { mutableStateOf("") }
+
+    // Permissions state tracking
+    var hasNotifPerm by remember { mutableStateOf(NetworkSSIDChecker.hasNotificationPermission(context)) }
+    var hasLocPerm by remember { mutableStateOf(NetworkSSIDChecker.hasLocationPermission(context)) }
+    var isBatteryOptimizedIgnored by remember { mutableStateOf(NetworkSSIDChecker.isIgnoringBatteryOptimizations(context)) }
     var currentSSID by remember { mutableStateOf(NetworkSSIDChecker.getCurrentSSID(context)) }
 
-    // Mock recent clips for UI
+    // Launcher for Android runtime permissions (Notification + Location)
+    val permissionsLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { results ->
+        hasNotifPerm = NetworkSSIDChecker.hasNotificationPermission(context)
+        hasLocPerm = NetworkSSIDChecker.hasLocationPermission(context)
+        currentSSID = NetworkSSIDChecker.getCurrentSSID(context)
+    }
+
+    // Launcher for battery optimization exemption intent
+    val batteryOptLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) {
+        isBatteryOptimizedIgnored = NetworkSSIDChecker.isIgnoringBatteryOptimizations(context)
+    }
+
+    val requestAllPermissions = {
+        val permsToRequest = mutableListOf<String>()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !hasNotifPerm) {
+            permsToRequest.add(Manifest.permission.POST_NOTIFICATIONS)
+        }
+        if (!hasLocPerm) {
+            permsToRequest.add(Manifest.permission.ACCESS_FINE_LOCATION)
+        }
+        if (permsToRequest.isNotEmpty()) {
+            permissionsLauncher.launch(permsToRequest.toTypedArray())
+        }
+    }
+
+    val requestBatteryOptimizationExemption = {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            try {
+                val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                    data = Uri.parse("package:${context.packageName}")
+                }
+                batteryOptLauncher.launch(intent)
+            } catch (e: Exception) {
+                // Fallback to battery optimization settings list
+                val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                context.startActivity(intent)
+            }
+        }
+    }
+
+    val handleAddCurrentSSID = {
+        val ssid = NetworkSSIDChecker.getCurrentSSID(context)
+        if (ssid.contains("位置情報権限") || !hasLocPerm) {
+            // Need permission to read SSID
+            requestAllPermissions()
+        } else if (ssid.isBlank() || ssid == "未接続" || ssid.startsWith("モバイル")) {
+            Toast.makeText(context, "有効なWi-Fiに接続されていません", Toast.LENGTH_SHORT).show()
+        } else if (allowedNetworks.contains(ssid)) {
+            Toast.makeText(context, "「$ssid」は既に指定ネットワークに登録されています", Toast.LENGTH_SHORT).show()
+        } else if (allowedNetworks.size >= 10) {
+            Toast.makeText(context, "指定ネットワークは最大10件までです", Toast.LENGTH_SHORT).show()
+        } else {
+            val updated = allowedNetworks + ssid
+            allowedNetworks = updated
+            prefs.edit().putStringSet("allowedNetworks", updated.toSet()).apply()
+            Toast.makeText(context, "「$ssid」を指定ネットワークに追加しました", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    val handleAddManualSSID = {
+        val trimmed = newSsidInput.trim()
+        if (trimmed.isNotEmpty()) {
+            if (allowedNetworks.contains(trimmed)) {
+                Toast.makeText(context, "既に登録されています", Toast.LENGTH_SHORT).show()
+            } else if (allowedNetworks.size >= 10) {
+                Toast.makeText(context, "最大10件までです", Toast.LENGTH_SHORT).show()
+            } else {
+                val updated = allowedNetworks + trimmed
+                allowedNetworks = updated
+                prefs.edit().putStringSet("allowedNetworks", updated.toSet()).apply()
+                newSsidInput = ""
+                Toast.makeText(context, "「$trimmed」を追加しました", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    val handleRemoveSSID = { ssid: String ->
+        val updated = allowedNetworks.filter { it != ssid }
+        allowedNetworks = updated
+        prefs.edit().putStringSet("allowedNetworks", updated.toSet()).apply()
+        Toast.makeText(context, "「$ssid」を削除しました", Toast.LENGTH_SHORT).show()
+    }
+
+    // Sample recent clips for demonstration
     val sampleClips = remember {
         listOf(
-            "749-218 (SMSワンタイム2FAコード)",
+            "749-218 (SMSワンタイム2FA認証コード)",
             "git clone https://github.com/syncclip/syncclip-core.git",
             "https://developer.android.com/design/ui/mobile/guides/styles/color",
             "curl -X POST https://api.syncclip.local/ping",
-            "ミーティング資料: https://docs.google.com/presentation"
+            "ミーティング資料: https://docs.google.com/presentation/d/1XyZ..."
         )
     }
+
+    val allPermissionsGranted = hasNotifPerm && hasLocPerm && isBatteryOptimizedIgnored
 
     Scaffold(
         topBar = {
@@ -154,15 +265,8 @@ fun SyncClipAndroidApp() {
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                         ) {
-                            Icon(
-                                imageVector = if (isDark) Icons.Default.DarkMode else Icons.Default.LightMode,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                modifier = Modifier.size(14.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = if (isDark) "ダーク" else "ライト",
+                                text = if (isDark) "ダークモード" else "ライトモード",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer,
                                 fontWeight = FontWeight.Bold
@@ -181,7 +285,152 @@ fun SyncClipAndroidApp() {
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            // Android Dynamic Color / Material You Banner
+
+            // 1. Android Background Permissions Setup Card (Prompt if OFF)
+            item {
+                if (!allPermissionsGranted) {
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.4f)
+                        ),
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Warning,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "常時バックグラウンド同期の権限設定",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "画面消灯中もクリップボードを自動暗号化同期し、Wi-Fi名を正確に判定するために以下の権限をONにしてください。",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            // Individual permission checklist
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = if (hasNotifPerm) Icons.Default.Check else Icons.Default.Close,
+                                        contentDescription = null,
+                                        tint = if (hasNotifPerm) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "通知の許可 (フォアグラウンド常駐サービス): ${if (hasNotifPerm) "有効" else "OFF"}",
+                                        style = MaterialTheme.typography.labelSmall
+                                    )
+                                }
+
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = if (hasLocPerm) Icons.Default.Check else Icons.Default.Close,
+                                        contentDescription = null,
+                                        tint = if (hasLocPerm) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "Wi-Fi名(SSID)取得権限 (位置情報): ${if (hasLocPerm) "有効" else "OFF"}",
+                                        style = MaterialTheme.typography.labelSmall
+                                    )
+                                }
+
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = if (isBatteryOptimizedIgnored) Icons.Default.Check else Icons.Default.Close,
+                                        contentDescription = null,
+                                        tint = if (isBatteryOptimizedIgnored) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "バッテリー最適化の除外 (スリープ停止防止): ${if (isBatteryOptimizedIgnored) "除外済" else "未設定"}",
+                                        style = MaterialTheme.typography.labelSmall
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(14.dp))
+
+                            // Action buttons
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                if (!hasNotifPerm || !hasLocPerm) {
+                                    Button(
+                                        onClick = { requestAllPermissions() },
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text("必要な権限を許可", fontSize = 12.sp)
+                                    }
+                                }
+                                if (!isBatteryOptimizedIgnored) {
+                                    FilledTonalButton(
+                                        onClick = { requestBatteryOptimizationExemption() },
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text("バッテリー最適化除外", fontSize = 12.sp)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    // All permissions active badge
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                        ),
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Check,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = "常時同期の準備完了 (すべての権限が有効です)",
+                                    fontWeight = FontWeight.Bold,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                                Text(
+                                    text = "バックグラウンド常駐・Wi-Fi SSID検出・省電力除外が設定済みです",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 2. Material You Dynamic Color Showcase
             item {
                 Card(
                     colors = CardDefaults.cardColors(
@@ -193,7 +442,7 @@ fun SyncClipAndroidApp() {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
-                                imageVector = Icons.Default.Palette,
+                                imageVector = Icons.Default.Settings,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(20.dp)
@@ -209,9 +458,9 @@ fun SyncClipAndroidApp() {
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
                             text = if (isDynamicColorSupported) {
-                                "Androidのシステム壁紙アクセントカラーと${if (isDark) "ダークモード" else "ライトモード"}を自動取得し、UIに反映しています。"
+                                "Androidの壁紙アクセントカラーと${if (isDark) "ダークモード" else "ライトモード"}を自動取得し、UIに反映しています。"
                             } else {
-                                "Androidのシステム${if (isDark) "ダークモード" else "ライトモード"}を自動取得し、UIに反映しています。"
+                                "Androidの${if (isDark) "ダークモード" else "ライトモード"}を自動取得し、UIに反映しています。"
                             },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
@@ -219,7 +468,6 @@ fun SyncClipAndroidApp() {
 
                         Spacer(modifier = Modifier.height(10.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            // Color swatches of the detected scheme
                             Box(
                                 modifier = Modifier
                                     .size(24.dp)
@@ -249,7 +497,7 @@ fun SyncClipAndroidApp() {
                 }
             }
 
-            // Sync Status & Network Card
+            // 3. Designated Wi-Fi Whitelist (Up to 10 networks) + 1-Click Current Network Add
             item {
                 Card(
                     colors = CardDefaults.cardColors(
@@ -258,35 +506,10 @@ fun SyncClipAndroidApp() {
                     shape = RoundedCornerShape(16.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column {
-                                Text(
-                                    text = "クリップボード自動同期",
-                                    fontWeight = FontWeight.Bold,
-                                    style = MaterialTheme.typography.bodyLarge
-                                )
-                                Text(
-                                    text = "バックグラウンド常駐中 (E2EE 暗号化)",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.outline
-                                )
-                            }
-                            Switch(
-                                checked = autoSync,
-                                onCheckedChange = {
-                                    autoSync = it
-                                    prefs.edit().putBoolean("autoSync", it).apply()
-                                }
-                            )
-                        }
-
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
-
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -296,7 +519,7 @@ fun SyncClipAndroidApp() {
                                 Text(
                                     text = "指定ネットワーク制限",
                                     fontWeight = FontWeight.Bold,
-                                    style = MaterialTheme.typography.bodyMedium
+                                    style = MaterialTheme.typography.bodyLarge
                                 )
                                 Text(
                                     text = "接続中: $currentSSID",
@@ -312,11 +535,106 @@ fun SyncClipAndroidApp() {
                                 }
                             )
                         }
+
+                        // 1-Click Add Current Connected Wi-Fi Button
+                        Button(
+                            onClick = { handleAddCurrentSSID() },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary
+                            )
+                        ) {
+                            Icon(imageVector = Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("現在の接続中Wi-Fiを指定ネットワークに追加")
+                        }
+
+                        // Whitelist header with counter (up to 10)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "登録済みネットワーク (${allowedNetworks.size} / 10件)",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        // Input field to manually add custom SSID
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = newSsidInput,
+                                onValueChange = { newSsidInput = it },
+                                placeholder = { Text("SSID名を手動入力...") },
+                                singleLine = true,
+                                modifier = Modifier.weight(1f)
+                            )
+                            FilledTonalButton(
+                                onClick = { handleAddManualSSID() },
+                                enabled = newSsidInput.isNotBlank() && allowedNetworks.size < 10
+                            ) {
+                                Text("追加")
+                            }
+                        }
+
+                        // Network items list
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            allowedNetworks.forEach { ssid ->
+                                val isCurrent = currentSSID == ssid
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = if (isCurrent) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f) else MaterialTheme.colorScheme.surface,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(
+                                                text = ssid,
+                                                fontFamily = FontFamily.Monospace,
+                                                fontWeight = FontWeight.SemiBold,
+                                                style = MaterialTheme.typography.bodyMedium
+                                            )
+                                            if (isCurrent) {
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text(
+                                                    text = "● 接続中",
+                                                    color = MaterialTheme.colorScheme.primary,
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
+                                        }
+
+                                        IconButton(
+                                            onClick = { handleRemoveSSID(ssid) },
+                                            modifier = Modifier.size(28.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Delete,
+                                                contentDescription = "削除",
+                                                tint = MaterialTheme.colorScheme.error,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
 
-            // History Header
+            // 4. Clipboard History Header & List
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -367,7 +685,11 @@ fun SyncClipAndroidApp() {
                                 color = MaterialTheme.colorScheme.primary
                             )
                         }
-                        IconButton(onClick = { /* Copy to clipboard */ }) {
+                        IconButton(onClick = {
+                            val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                            cm.setPrimaryClip(android.content.ClipData.newPlainText("SyncClip", clipText))
+                            Toast.makeText(context, "クリップボードにコピーしました", Toast.LENGTH_SHORT).show()
+                        }) {
                             Icon(
                                 imageVector = Icons.Default.ContentCopy,
                                 contentDescription = "コピー",
@@ -379,7 +701,7 @@ fun SyncClipAndroidApp() {
             }
 
             item {
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(24.dp))
             }
         }
     }

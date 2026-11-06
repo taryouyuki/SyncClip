@@ -40,7 +40,12 @@ class ClipboardListenerService : Service() {
         clipboardManager.addPrimaryClipChangedListener(clipListener)
 
         createNotificationChannel()
-        startForeground(NOTIFICATION_ID, buildNotification("SyncClip 監視中", "指定ネットワークで暗号化同期待機中"))
+        val notification = buildNotification("SyncClip 監視中", "指定ネットワークで暗号化同期待機中")
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(NOTIFICATION_ID, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+        } else {
+            startForeground(NOTIFICATION_ID, notification)
+        }
     }
 
     private fun onClipboardChanged() {

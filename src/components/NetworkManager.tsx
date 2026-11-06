@@ -38,11 +38,22 @@ export const NetworkManager: React.FC<NetworkManagerProps> = ({
     e.preventDefault();
     const trimmed = newSsid.trim();
     if (!trimmed || settings.allowedNetworks.includes(trimmed)) return;
+    if (settings.allowedNetworks.length >= 10) return;
 
     updateSettings({
       allowedNetworks: [...settings.allowedNetworks, trimmed],
     });
     setNewSsid('');
+  };
+
+  const handleQuickAddCurrentNetwork = () => {
+    const current = settings.currentNetwork;
+    if (!current || settings.allowedNetworks.includes(current)) return;
+    if (settings.allowedNetworks.length >= 10) return;
+
+    updateSettings({
+      allowedNetworks: [...settings.allowedNetworks, current],
+    });
   };
 
   const handleRemoveSsid = (ssid: string) => {
@@ -91,6 +102,21 @@ export const NetworkManager: React.FC<NetworkManagerProps> = ({
                   ? '指定ネットワークリストに一致しています。端末間でのクリップボード自動暗号化同期が実行されます。'
                   : '指定外のネットワークです。プライバシー保護のためクリップボードの外部送信は遮断されています。'}
               </p>
+              
+              {/* Quick Add Button if not yet in whitelist */}
+              {!isNetworkAllowed && (
+                <div className="mt-3">
+                  <button
+                    type="button"
+                    onClick={handleQuickAddCurrentNetwork}
+                    disabled={settings.allowedNetworks.length >= 10}
+                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-xs"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>現在のWi-Fi「{settings.currentNetwork}」を指定ネットワークに追加</span>
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
@@ -164,12 +190,21 @@ export const NetworkManager: React.FC<NetworkManagerProps> = ({
       <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 shadow-xs space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
-            <h4 className="text-sm font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-              <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-              <span>指定ネットワーク一覧 (ホワイトリスト)</span>
-            </h4>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              ここに登録されたWi-Fi SSIDまたはLANセグメントに接続している場合のみ、端末間でクリップボードを共有します。
+            <div className="flex items-center gap-2">
+              <h4 className="text-sm font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                <span>指定ネットワーク一覧 (ホワイトリスト)</span>
+              </h4>
+              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                settings.allowedNetworks.length >= 10
+                  ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
+                  : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+              }`}>
+                {settings.allowedNetworks.length} / 10件
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              登録されたWi-Fi SSIDまたはLAN接続時のみ、端末間でクリップボードを暗号化共有します (最大10件)。
             </p>
           </div>
 
@@ -178,12 +213,13 @@ export const NetworkManager: React.FC<NetworkManagerProps> = ({
               type="text"
               value={newSsid}
               onChange={(e) => setNewSsid(e.target.value)}
-              placeholder="新しいWi-Fi SSIDを入力..."
-              className="px-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500 w-48"
+              disabled={settings.allowedNetworks.length >= 10}
+              placeholder={settings.allowedNetworks.length >= 10 ? '上限(10件)に達しました' : '新しいWi-Fi SSIDを入力...'}
+              className="px-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500 w-48 disabled:opacity-50"
             />
             <button
               type="submit"
-              disabled={!newSsid.trim()}
+              disabled={!newSsid.trim() || settings.allowedNetworks.length >= 10}
               className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg text-xs font-medium flex items-center gap-1 transition-colors whitespace-nowrap shadow-xs"
             >
               <Plus className="w-3.5 h-3.5" />
