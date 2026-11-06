@@ -1,0 +1,6 @@
+{
+  "name": "SyncClip - Cross-Platform Encrypted Clipboard",
+  "description": "PC・スマホ・タブレット間で暗号化自動同期するセキュアなクリップボード共有アプリ。指定ネットワーク制限、履歴管理、Android/Windows向けGitHubビルド対応。",
+  "requestFramePermissions": ["clipboard-read", "clipboard-write"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
