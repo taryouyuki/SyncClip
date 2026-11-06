@@ -2,6 +2,7 @@
   "name": "syncclip-windows",
   "version": "1.0.0",
   "description": "SyncClip Cross-Platform Encrypted Clipboard for Windows",
+  "author": "SyncClip Team",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
@@ -18,7 +19,8 @@
     "appId": "com.syncclip.windows",
     "productName": "SyncClip",
     "win": {
-      "target": ["nsis", "portable"]
+      "target": ["nsis", "portable"],
+      "icon": "icon.png"
     },
     "nsis": {
       "oneClick": false,
