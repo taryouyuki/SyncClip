@@ -244,7 +244,7 @@ dependencies {
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
-        android:label="SyncClip"
+        android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.Light.NoActionBar"
@@ -281,6 +281,100 @@ dependencies {
 
     </application>
 </manifest>
+`,
+  },
+  {
+    path: 'android/app/src/main/res/values/strings.xml',
+    name: 'strings.xml',
+    category: 'android',
+    language: 'xml',
+    content: `<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">SyncClip</string>
+    <string name="app_description">PC・スマホ・タブレット暗号化クリップボード同期</string>
+</resources>
+`,
+  },
+  {
+    path: 'android/app/src/main/res/values/colors.xml',
+    name: 'colors.xml',
+    category: 'android',
+    language: 'xml',
+    content: `<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="primary">#056D3B</color>
+    <color name="primary_dark">#80D49E</color>
+    <color name="background_light">#F7FAF4</color>
+    <color name="background_dark">#111411</color>
+</resources>
+`,
+  },
+  {
+    path: 'android/app/src/main/res/drawable/ic_launcher_background.xml',
+    name: 'ic_launcher_background.xml',
+    category: 'android',
+    language: 'xml',
+    content: `<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:fillColor="#056D3B" android:pathData="M0,0h108v108h-108z" />
+</vector>
+`,
+  },
+  {
+    path: 'android/app/src/main/res/drawable/ic_launcher_foreground.xml',
+    name: 'ic_launcher_foreground.xml',
+    category: 'android',
+    language: 'xml',
+    content: `<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:fillColor="#FFFFFF" android:pathData="M38,26h32c2.2,0 4,1.8 4,4v48c0,2.2 -1.8,4 -4,4H38c-2.2,0 -4,-1.8 -4,-4V30c0,-2.2 1.8,-4 4,-4z M42,38v4h24v-4H42z M42,48v4h24v-4H42z M42,58v4h16v-4H42z" />
+</vector>
+`,
+  },
+  {
+    path: 'android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml',
+    name: 'ic_launcher.xml',
+    category: 'android',
+    language: 'xml',
+    content: `<?xml version="1.0" encoding="utf-8"?>
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@drawable/ic_launcher_background" />
+    <foreground android:drawable="@drawable/ic_launcher_foreground" />
+</adaptive-icon>
+`,
+  },
+  {
+    path: 'android/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml',
+    name: 'ic_launcher_round.xml',
+    category: 'android',
+    language: 'xml',
+    content: `<?xml version="1.0" encoding="utf-8"?>
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@drawable/ic_launcher_background" />
+    <foreground android:drawable="@drawable/ic_launcher_foreground" />
+</adaptive-icon>
+`,
+  },
+  {
+    path: 'android/gradlew',
+    name: 'gradlew',
+    category: 'android',
+    language: 'bash',
+    content: `#!/bin/sh
+if command -v gradle >/dev/null 2>&1; then
+    exec gradle "$@"
+else
+    echo "Gradle not found"
+    exit 1
+fi
 `,
   },
   {

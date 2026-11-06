@@ -285,7 +285,7 @@ fun SyncClipAndroidApp() {
                             )
                         }
 
-                        Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
 
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
