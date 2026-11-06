@@ -26,11 +26,11 @@ on:
 
 jobs:
   build:
-    name: Build Android Release APK
+    name: Build Android Debug APK
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Set up JDK 17
@@ -38,17 +38,16 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '17'
-          cache: 'gradle'
 
-      - name: Grant execute permission for gradlew
-        run: |
-          cd android
-          chmod +x gradlew || true
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.5'
 
       - name: Build Android APK with Gradle
         run: |
           cd android
-          ./gradlew assembleDebug --stacktrace
+          gradle assembleDebug --stacktrace
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
@@ -78,20 +77,18 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Setup Node.js 20
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
-          cache-dependency-path: windows/package-lock.json
 
       - name: Install dependencies
         run: |
           cd windows
-          npm ci || npm install
+          npm install
 
       - name: Build Windows Executable
         run: |
@@ -111,15 +108,37 @@ jobs:
 
   // ===================== ANDROID SOURCE FILES =====================
   {
+    path: 'android/settings.gradle.kts',
+    name: 'settings.gradle.kts',
+    category: 'android',
+    language: 'kotlin',
+    content: `pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+rootProject.name = "SyncClip"
+include(":app")
+`,
+  },
+  {
     path: 'android/build.gradle.kts',
     name: 'build.gradle.kts (root)',
     category: 'android',
     language: 'kotlin',
     content: `// Top-level build file for Android
 plugins {
-    alias(libs.plugins.android.application) apply false
-    alias(libs.plugins.kotlin.android) apply false
-    alias(libs.plugins.kotlin.compose) apply false
+    id("com.android.application") version "8.2.2" apply false
+    id("org.jetbrains.kotlin.android") version "1.9.22" apply false
 }
 `,
   },
@@ -704,8 +723,7 @@ fun SyncClipAndroidApp() {
     "appId": "com.syncclip.windows",
     "productName": "SyncClip",
     "win": {
-      "target": ["nsis", "portable"],
-      "icon": "icon.ico"
+      "target": ["nsis", "portable"]
     },
     "nsis": {
       "oneClick": false,
@@ -857,7 +875,10 @@ app.whenReady().then(() => {
   mainWindow.loadURL(config.serverUrl);
 
   // System Tray configuration
-  tray = new Tray(path.join(__dirname, 'icon.ico'));
+  const fs = require('fs');
+  const iconPath = path.join(__dirname, 'icon.ico');
+  const trayIcon = fs.existsSync(iconPath) ? iconPath : require('electron').nativeImage.createEmpty();
+  tray = new Tray(trayIcon);
   const contextMenu = Menu.buildFromTemplate([
     { label: 'SyncClip を開く', click: () => mainWindow.show() },
     { label: '自動同期: ' + (config.autoSync ? '有効' : '無効'), click: () => {
