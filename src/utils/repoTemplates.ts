@@ -44,6 +44,13 @@ jobs:
         with:
           gradle-version: '8.5'
 
+      - name: Configure persistent debug signing key
+        run: |
+          mkdir -p ~/.android
+          if [ -f "android/app/debug.keystore" ]; then
+            cp android/app/debug.keystore ~/.android/debug.keystore
+          fi
+
       - name: Build Android APK with Gradle
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
@@ -172,8 +179,8 @@ android {
         applicationId = "com.syncclip.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 2
+        versionName = "1.0.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -181,7 +188,22 @@ android {
         }
     }
 
+    signingConfigs {
+        getByName("debug") {
+            val keyFile = file("debug.keystore")
+            if (keyFile.exists()) {
+                storeFile = keyFile
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
+            }
+        }
+    }
+
     buildTypes {
+        getByName("debug") {
+            signingConfig = signingConfigs.getByName("debug")
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(
