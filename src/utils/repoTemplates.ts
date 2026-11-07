@@ -856,6 +856,7 @@ fun SyncClipAndroidApp() {
     var currentSSID by remember { mutableStateOf(NetworkSSIDChecker.getCurrentSSID(context)) }
     var hasNotifPerm by remember { mutableStateOf(NetworkSSIDChecker.hasNotificationPermission(context)) }
     var hasLocPerm by remember { mutableStateOf(NetworkSSIDChecker.hasLocationPermission(context)) }
+    var clipsList by remember { mutableStateOf(listOf("749-218 (SMSワンタイム2FA認証コード)", "git clone https://github.com/syncclip/syncclip-core.git")) }
 
     Scaffold(
         topBar = {
@@ -910,6 +911,23 @@ fun SyncClipAndroidApp() {
                         }
                     }, modifier = Modifier.fillMaxWidth()) {
                         Text("現在の接続中Wi-Fiを指定ネットワークに追加")
+                    }
+                }
+            }
+
+            // Clipboard History Header with Delete & Clear
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(text = "クリップボード履歴 (\${clipsList.size} / $maxHistory 件)", fontWeight = FontWeight.Bold)
+                if (clipsList.isNotEmpty()) {
+                    TextButton(onClick = {
+                        clipsList = emptyList()
+                        prefs.edit().remove("savedClipsList").apply()
+                    }) {
+                        Text("全件削除", color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
                     }
                 }
             }

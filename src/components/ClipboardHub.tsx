@@ -30,6 +30,7 @@ interface ClipboardHubProps {
   settings: AppSettings;
   onSendClip: (text: string) => Promise<void>;
   onDeleteClip: (id: string) => void;
+  onClearAllClips: () => void;
   onTogglePin: (id: string) => void;
   onOpenSettings: () => void;
   onInspectPayload: (item: ClipboardItem) => void;
@@ -43,6 +44,7 @@ export const ClipboardHub: React.FC<ClipboardHubProps> = ({
   settings,
   onSendClip,
   onDeleteClip,
+  onClearAllClips,
   onTogglePin,
   onOpenSettings,
   onInspectPayload,
@@ -315,6 +317,18 @@ export const ClipboardHub: React.FC<ClipboardHubProps> = ({
                 className="pl-8 pr-3 py-1.5 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-emerald-500 w-36 sm:w-48"
               />
             </div>
+
+            {history.length > 0 && (
+              <button
+                type="button"
+                onClick={onClearAllClips}
+                className="px-2.5 py-1.5 text-xs text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 rounded-lg flex items-center gap-1 transition-colors whitespace-nowrap"
+                title="すべての履歴を削除"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">全件削除</span>
+              </button>
+            )}
           </div>
         </div>
 

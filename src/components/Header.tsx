@@ -12,8 +12,8 @@ import {
 } from 'lucide-react';
 
 interface HeaderProps {
-  activeTab: 'clipboard' | 'network' | 'devices' | 'github';
-  setActiveTab: (tab: 'clipboard' | 'network' | 'devices' | 'github') => void;
+  activeTab: 'clipboard' | 'network' | 'devices';
+  setActiveTab: (tab: 'clipboard' | 'network' | 'devices') => void;
   onOpenSettings: () => void;
   onNewClip: () => void;
   isDark: boolean;
@@ -95,18 +95,6 @@ export const Header: React.FC<HeaderProps> = ({
               <Smartphone className="w-4 h-4" />
               <span>端末・ペアリング</span>
             </button>
-
-            <button
-              onClick={() => setActiveTab('github')}
-              className={`px-3 py-2 text-sm font-medium rounded-lg transition-colors whitespace-nowrap shrink-0 flex items-center gap-2 ${
-                activeTab === 'github'
-                  ? 'bg-slate-100 dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 font-semibold'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
-              }`}
-            >
-              <Github className="w-4 h-4" />
-              <span>GitHubビルド</span>
-            </button>
           </nav>
 
           {/* Zone 3: Primary Actions */}
@@ -170,16 +158,6 @@ export const Header: React.FC<HeaderProps> = ({
             }`}
           >
             端末一覧
-          </button>
-          <button
-            onClick={() => setActiveTab('github')}
-            className={`px-2.5 py-1 text-xs rounded font-medium whitespace-nowrap ${
-              activeTab === 'github'
-                ? 'bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300'
-                : 'text-slate-600 dark:text-slate-400'
-            }`}
-          >
-            GitHubビルド
           </button>
         </div>
       </div>

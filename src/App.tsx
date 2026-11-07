@@ -3,7 +3,6 @@ import { Header } from './components/Header';
 import { ClipboardHub } from './components/ClipboardHub';
 import { NetworkManager } from './components/NetworkManager';
 import { DeviceManager } from './components/DeviceManager';
-import { GitHubBuildCenter } from './components/GitHubBuildCenter';
 import { SettingsModal } from './components/SettingsModal';
 import { EncryptedPayloadModal } from './components/EncryptedPayloadModal';
 import { ClipboardItem, AppSettings, DeviceInfo } from './types';
@@ -67,7 +66,7 @@ export default function App() {
   };
 
   // Navigation tab
-  const [activeTab, setActiveTab] = useState<'clipboard' | 'network' | 'devices' | 'github'>('clipboard');
+  const [activeTab, setActiveTab] = useState<'clipboard' | 'network' | 'devices'>('clipboard');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [inspectingItem, setInspectingItem] = useState<ClipboardItem | null>(null);
   const [passphraseFingerprint, setPassphraseFingerprint] = useState('8F3C-9A12-B4E8-710D');
@@ -363,6 +362,12 @@ export default function App() {
     setHistory((prev) => prev.filter((item) => item.id !== id));
   };
 
+  const handleClearAllClips = () => {
+    if (window.confirm('すべてのクリップボード履歴を削除しますか？')) {
+      setHistory([]);
+    }
+  };
+
   const handleTogglePin = (id: string) => {
     setHistory((prev) =>
       prev.map((item) =>
@@ -400,6 +405,7 @@ export default function App() {
             settings={settings}
             onSendClip={handleSendClip}
             onDeleteClip={handleDeleteClip}
+            onClearAllClips={handleClearAllClips}
             onTogglePin={handleTogglePin}
             onOpenSettings={() => setIsSettingsOpen(true)}
             onInspectPayload={(item) => setInspectingItem(item)}
@@ -424,10 +430,6 @@ export default function App() {
             onSimulateIncomingClip={handleSimulateIncomingClip}
             passphraseFingerprint={passphraseFingerprint}
           />
-        )}
-
-        {activeTab === 'github' && (
-          <GitHubBuildCenter />
         )}
 
       </main>

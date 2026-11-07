@@ -219,8 +219,8 @@ fun SyncClipAndroidApp() {
         Toast.makeText(context, "「$ssid」を削除しました", Toast.LENGTH_SHORT).show()
     }
 
-    // Sample recent clips for demonstration
-    val sampleClips = remember {
+    // Default initial sample clips if storage is empty
+    val defaultClips = remember {
         listOf(
             "749-218 (SMSワンタイム2FA認証コード)",
             "git clone https://github.com/syncclip/syncclip-core.git",
@@ -228,6 +228,45 @@ fun SyncClipAndroidApp() {
             "curl -X POST https://api.syncclip.local/ping",
             "ミーティング資料: https://docs.google.com/presentation/d/1XyZ..."
         )
+    }
+
+    // Mutable & persistent clipboard history
+    var clipsList by remember {
+        val raw = prefs.getString("savedClipsList", null)
+        val initial = if (raw != null) {
+            try {
+                val jsonArr = org.json.JSONArray(raw)
+                val list = mutableListOf<String>()
+                for (i in 0 until jsonArr.length()) {
+                    list.add(jsonArr.getString(i))
+                }
+                list
+            } catch (e: Exception) {
+                defaultClips
+            }
+        } else {
+            defaultClips
+        }
+        mutableStateOf(initial)
+    }
+
+    val saveClipsList = { list: List<String> ->
+        val jsonArr = org.json.JSONArray()
+        list.forEach { jsonArr.put(it) }
+        prefs.edit().putString("savedClipsList", jsonArr.toString()).apply()
+    }
+
+    val handleDeleteClip = { clipText: String ->
+        val updated = clipsList.filter { it != clipText }
+        clipsList = updated
+        saveClipsList(updated)
+        Toast.makeText(context, "履歴から削除しました", Toast.LENGTH_SHORT).show()
+    }
+
+    val handleClearAllClips = {
+        clipsList = emptyList()
+        saveClipsList(emptyList())
+        Toast.makeText(context, "すべての履歴を消去しました", Toast.LENGTH_SHORT).show()
     }
 
     val allPermissionsGranted = hasNotifPerm && hasLocPerm && isBatteryOptimizedIgnored
@@ -642,59 +681,116 @@ fun SyncClipAndroidApp() {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "クリップボード履歴 ($maxHistory 件表示)",
+                        text = "クリップボード履歴 (${clipsList.size} / $maxHistory 件)",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
-                    TextButton(
-                        onClick = {
-                            val next = if (maxHistory >= 50) 5 else maxHistory + 5
-                            maxHistory = next
-                            prefs.edit().putInt("maxHistory", next).apply()
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (clipsList.isNotEmpty()) {
+                            TextButton(
+                                onClick = { handleClearAllClips() }
+                            ) {
+                                Text(
+                                    text = "全件削除",
+                                    color = MaterialTheme.colorScheme.error,
+                                    fontSize = 12.sp
+                                )
+                            }
                         }
-                    ) {
-                        Text("上限変更 (${maxHistory}件)")
+                        TextButton(
+                            onClick = {
+                                val next = if (maxHistory >= 50) 5 else maxHistory + 5
+                                maxHistory = next
+                                prefs.edit().putInt("maxHistory", next).apply()
+                            }
+                        ) {
+                            Text("上限変更 (${maxHistory}件)", fontSize = 12.sp)
+                        }
                     }
                 }
             }
 
-            // History Items List
-            items(sampleClips.take(maxHistory)) { clipText ->
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
-                    ),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier.padding(14.dp),
-                        verticalAlignment = Alignment.CenterVertically
+            // Empty state if no clips
+            if (clipsList.isEmpty()) {
+                item {
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = clipText,
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontFamily = FontFamily.Monospace,
-                                maxLines = 2
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ContentPaste,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.outline,
+                                modifier = Modifier.size(32.dp)
                             )
-                            Spacer(modifier = Modifier.height(4.dp))
+                            Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                text = "AES-256-GCM 暗号化同期済",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.primary
+                                text = "クリップボード履歴はありません",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.outline
                             )
                         }
-                        IconButton(onClick = {
-                            val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                            cm.setPrimaryClip(android.content.ClipData.newPlainText("SyncClip", clipText))
-                            Toast.makeText(context, "クリップボードにコピーしました", Toast.LENGTH_SHORT).show()
-                        }) {
-                            Icon(
-                                imageVector = Icons.Default.ContentCopy,
-                                contentDescription = "コピー",
-                                tint = MaterialTheme.colorScheme.primary
-                            )
+                    }
+                }
+            } else {
+                // History Items List
+                items(clipsList.take(maxHistory)) { clipText ->
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = clipText,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontFamily = FontFamily.Monospace,
+                                    maxLines = 2
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "AES-256-GCM 暗号化同期済",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            // Copy button
+                            IconButton(onClick = {
+                                val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                cm.setPrimaryClip(android.content.ClipData.newPlainText("SyncClip", clipText))
+                                Toast.makeText(context, "クリップボードにコピーしました", Toast.LENGTH_SHORT).show()
+                            }) {
+                                Icon(
+                                    imageVector = Icons.Default.ContentCopy,
+                                    contentDescription = "コピー",
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            // Delete button
+                            IconButton(onClick = {
+                                handleDeleteClip(clipText)
+                            }) {
+                                Icon(
+                                    imageVector = Icons.Default.Delete,
+                                    contentDescription = "削除",
+                                    tint = MaterialTheme.colorScheme.error.copy(alpha = 0.8f)
+                                )
+                            }
                         }
                     }
                 }
