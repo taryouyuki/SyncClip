@@ -325,7 +325,7 @@ fun SyncClipAndroidApp() {
                             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(
-                                        imageVector = if (hasNotifPerm) Icons.Default.Check else Icons.Default.Close,
+                                        imageVector = if (hasNotifPerm) Icons.Default.Check else Icons.Default.Clear,
                                         contentDescription = null,
                                         tint = if (hasNotifPerm) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
                                         modifier = Modifier.size(16.dp)
@@ -339,7 +339,7 @@ fun SyncClipAndroidApp() {
 
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(
-                                        imageVector = if (hasLocPerm) Icons.Default.Check else Icons.Default.Close,
+                                        imageVector = if (hasLocPerm) Icons.Default.Check else Icons.Default.Clear,
                                         contentDescription = null,
                                         tint = if (hasLocPerm) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
                                         modifier = Modifier.size(16.dp)
@@ -353,7 +353,7 @@ fun SyncClipAndroidApp() {
 
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(
-                                        imageVector = if (isBatteryOptimizedIgnored) Icons.Default.Check else Icons.Default.Close,
+                                        imageVector = if (isBatteryOptimizedIgnored) Icons.Default.Check else Icons.Default.Clear,
                                         contentDescription = null,
                                         tint = if (isBatteryOptimizedIgnored) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
                                         modifier = Modifier.size(16.dp)
